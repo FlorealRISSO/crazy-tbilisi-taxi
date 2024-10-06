@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crazy Tbilisi Taxi</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #87CEEB;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background-color: #333;
+            border: 3px solid #fff;
+            box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        #gameContainer {
+            position: relative;
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        #scoreDisplay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            font-size: 24px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+            box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.7);
+        }
+
+        #restartButton {
+            margin-top: 20px;
+            padding: 12px 30px;
+            font-size: 18px;
+            background-color: #ff4747;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #restartButton:hover {
+            background-color: #ff6b6b;
+        }
+
+        /* Tutorial Modal */
+        #tutorial {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            z-index: 10;
+        }
+
+        #tutorialContent {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        #startButton {
+            padding: 15px 40px;
+            font-size: 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background-color 0.3s;
+        }
+
+        #startButton:hover {
+            background-color: #66BB6A;
+        }
+
+        footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #555;
+        }
+
+        footer a {
+            color: #3498db;
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="gameContainer">
+        <canvas id="carLaneCanvas" width="600" height="800"></canvas>
+        <div id="scoreDisplay">Score: 0</div>
+
+        <div id="gameOver">
+            <h2>Game Over</h2>
+            <p>Your Score: <span id="finalScore"></span></p>
+            <button id="restartButton">Restart</button>
+        </div>
+
+        <!-- Tutorial Modal -->
+        <div id="tutorial">
+            <div id="tutorialContent">
+                <h2>Welcome to Crazy Tbilisi Taxi!</h2>
+                <p>Guide your taxi through the chaotic streets of Tbilisi without crashing into other cars!</p>
+                <p>Use <strong>Left Arrow</strong> and <strong>Right Arrow</strong> to change lanes. Press <strong>Up
+                        Arrow</strong> to speed up and <strong>Down Arrow</strong> to slow down.</p>
+                <button id="startButton">Start Game</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('carLaneCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const directionWidth = canvas.width / 2;
+        const laneWidth = canvas.width / 4;
+        const carWidth = 80;
+        const carHeight = 100;
+
+        const leftCarSpeed = 10;
+        const rightCarSpeed = 4;
+        let carSpeed = 0;
+
+        let laneOffset = 0;
+        let cars = [];  // List of all cars
+        let score = 0;
+        let gameRunning = true;
+
+        function gameOver() {
+            gameRunning = false;
+            document.getElementById('gameOver').style.display = 'block';
+            document.getElementById('finalScore').textContent = score;
+        }
+
+        class Car {
+            constructor(x, y, laneIndex, isPlayer) {
+                this.x = x;
+                this.y = y;
+                this.laneIndex = laneIndex;
+                this.color = isPlayer ? 'white' : this.getRandomColor();
+                this.wheelColor = '#333'; // Black wheels
+                this.windowColor = '#ADD8E6'; // Light blue for windows
+            }
+
+            // Draw the car
+            draw() {
+                // Car body
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, carWidth, carHeight); // main body
+
+                // Windows
+                ctx.fillStyle = this.windowColor;
+                if (this.laneIndex > 1) {
+                    ctx.fillRect(this.x + 10, this.y + 15, carWidth - 20, carHeight / 4); // top windows
+                } else {
+                    ctx.fillRect(this.x + 10, this.y + carHeight - (carHeight / 4) - 15, carWidth - 20, carHeight / 4); // top windows
+                }
+
+                // Wheels
+                ctx.fillStyle = this.wheelColor;
+                ctx.beginPath();
+                ctx.fillRect(this.x - 5, this.y + 10, 5, 20);
+                ctx.fillRect(this.x + carWidth, this.y + 10, 5, 20);
+                ctx.fillRect(this.x - 5, this.y + 70, 5, 20);
+                ctx.fillRect(this.x + carWidth, this.y + 70, 5, 20);
+                ctx.fill();
+            }
+
+            move() {
+                if (this.laneIndex === 0 || this.laneIndex === 1) {
+                    this.y += leftCarSpeed + carSpeed;
+                } else if (this.laneIndex === 2 || this.laneIndex === 3) {
+                    this.y += rightCarSpeed + carSpeed;
+                }
+            }
+
+            isOutOfBounds() {
+                return this.y > canvas.height;
+            }
+
+            getRandomColor() {
+                const letters = '0123456789ABCDEF';
+                let color = '#';
+                for (let i = 0; i < 6; i++) {
+                    color += letters[Math.floor(Math.random() * 16)];
+                }
+                return color;
+            }
+
+            checkCollision(car) {
+                return (this.x < car.x + carWidth &&
+                    this.x + carWidth > car.x &&
+                    this.y < car.y + carHeight &&
+                    this.y + carHeight > car.y);
+            }
+        }
+
+        function spawnCar() {
+            if (!gameRunning) return;
+
+            const leftLaneCars = cars.filter(car => car.laneIndex < 2).length;
+            const rightLaneCars = cars.filter(car => car.laneIndex >= 2).length;
+            const totalCars = cars.length;
+
+            let laneIndex;
+            if (totalCars < 5) {
+                laneIndex = Math.floor(Math.random() * 4);
+            } else if (leftLaneCars > rightLaneCars * 2) {
+                laneIndex = 2 + Math.floor(Math.random() * 2);
+            } else if (rightLaneCars > leftLaneCars * 2) {
+                laneIndex = Math.floor(Math.random() * 2);
+            } else {
+                const randomValue = Math.random();
+                laneIndex = randomValue < 0.6 ? Math.floor(randomValue * 2) : 2 + Math.floor(randomValue * 2);
+            }
+
+            const x = laneIndex * laneWidth + (laneWidth - carWidth) / 2;
+            const y = -carHeight;
+            const car = new Car(x, y, laneIndex, false);
+            cars.push(car);
+
+            if (cars.length > 15) {
+                cars.shift();
+            }
+        }
+
+        function drawLanes() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#222';
+            ctx.fillRect(0, 0, laneWidth * 2 - 5, canvas.height);
+            ctx.fillRect(directionWidth + 5, 0, laneWidth * 2 - 5, canvas.height);
+
+            for (let i = 0; i < 4; i++) {
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 5;
+                ctx.setLineDash([20, 20]);
+                ctx.beginPath();
+                ctx.moveTo(i * directionWidth + directionWidth / 2, laneOffset);
+                ctx.lineTo(i * directionWidth + directionWidth / 2, canvas.height);
+                ctx.stroke();
+            }
+        }
+
+        function animateLanesAndCars() {
+            if (!gameRunning) return;
+
+            laneOffset += 5 + carSpeed;
+            if (laneOffset >= 40) {
+                laneOffset = 0;
+            }
+            drawLanes();
+            playerCar.draw();
+
+            cars.forEach((car, index) => {
+                car.move();
+                car.draw();
+            });
+
+            cars.forEach((car, index) => {
+                if (playerCar.checkCollision(car)) {
+                    gameOver();
+                }
+            });
+            cars = cars.filter(car => !car.isOutOfBounds());
+
+            score++;
+            document.getElementById('scoreDisplay').textContent = `Score: ${score}`;
+            requestAnimationFrame(animateLanesAndCars);
+        }
+
+        function handleKeyDown(event) {
+            if (!gameRunning) return;
+
+            switch (event.key) {
+                case 'ArrowLeft':
+                    playerCar.x = Math.max(0, playerCar.x - 20);
+                    break;
+                case 'ArrowRight':
+                    playerCar.x = Math.min(canvas.width - carWidth, playerCar.x + 20);
+                    break;
+                case 'ArrowUp':
+                    carSpeed = Math.min(5, carSpeed + 1);
+                    break;
+                case 'ArrowDown':
+                    carSpeed = Math.max(0, carSpeed - 1);
+                    break;
+            }
+        }
+
+        const playerCar = new Car(laneWidth * 2 + (laneWidth - carWidth) / 2, canvas.height - carHeight - 20, 3, true);
+
+        document.addEventListener('keydown', handleKeyDown);
+        document.getElementById('restartButton').addEventListener('click', () => {
+            cars = [];
+            score = 0;
+            carSpeed = 0;
+            playerCar.x = laneWidth * 2 + (laneWidth - carWidth) / 2;
+            playerCar.laneIndex = 2;
+            document.getElementById('gameOver').style.display = 'none';
+            gameRunning = true;
+            animateLanesAndCars();
+        });
+
+        document.getElementById('startButton').addEventListener('click', () => {
+            document.getElementById('tutorial').style.display = 'none';
+            animateLanesAndCars();
+        });
+
+        setInterval(spawnCar, 500);
+    </script>
+</body>
+
+<footer>
+    <p>
+        <a href="https://github.com/FlorealRISSO/crazy-tbilisi-taxi" target="_blank">View on GitHub</a> |
+        © 2024 Floréal Risso |
+        <a href="https://opensource.org/licenses/MIT" target="_blank">MIT License</a>
+    </p>
+</footer>
+
+</html>
